@@ -89,7 +89,7 @@ class PacketHeader(object):
         if self._time is None:
             if any([self._ts_high is None, self._ts_high is None]):
                 raise InvalidHeaderException('No time supplied!')
-            self._time = self._ts_high + self._ts_low / self.frac_scale
+            self._time = self._ts_high + float(self._ts_low) / self.frac_scale
         return self._time
 
     def set_checksum(self, payload):

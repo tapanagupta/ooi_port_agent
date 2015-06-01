@@ -8,6 +8,7 @@ Usage:
     port_agent.py camhd <port> <commandport> <instaddr> <subport> <reqport> [--sniff=<sniffport>] [--name=<name>]
     port_agent.py antelope <port> <commandport> <instaddr> <instport> [--sniff=<sniffport>] [--name=<name>]
     port_agent.py datalog <port> <commandport> <files>...
+    port_agent.py digilog_ascii <port> <commandport> <files>...
 
 Options:
     -h, --help          Show this screen.
@@ -21,7 +22,7 @@ from twisted.internet import reactor
 from twisted.python import log
 import yaml
 from common import AgentTypes
-from agents import TcpPortAgent, RsnPortAgent, BotptPortAgent, DatalogReadingPortAgent
+from agents import TcpPortAgent, RsnPortAgent, BotptPortAgent, DatalogReadingPortAgent, DigiDatalogAsciiPortAgent
 
 
 def configure_logging():
@@ -91,6 +92,7 @@ def main():
         AgentTypes.RSN: RsnPortAgent,
         AgentTypes.BOTPT: BotptPortAgent,
         AgentTypes.DATALOG: DatalogReadingPortAgent,
+        AgentTypes.DIGILOG_ASCII: DigiDatalogAsciiPortAgent,
         AgentTypes.CAMHD: CamhdPortAgent,
         AgentTypes.ANTELOPE: AntelopePortAgent
     }

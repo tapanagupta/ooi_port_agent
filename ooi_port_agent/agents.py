@@ -1,14 +1,16 @@
 from __future__ import division
+from collections import deque
 import json
+import re
 
 from twisted.internet.endpoints import TCP4ServerEndpoint
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.python.logfile import DailyLogFile
-from common import EndpointType, PacketType, Format, HEARTBEAT_INTERVAL, NEWLINE
+from common import EndpointType, PacketType, Format, HEARTBEAT_INTERVAL, NEWLINE, string_to_ntp_date_time
 from factories import DataFactory, CommandFactory, InstrumentClientFactory, DigiInstrumentClientFactory, \
     DigiCommandClientFactory
-from packet import Packet
+from packet import Packet, PacketHeader
 from router import Router
 
 
@@ -227,6 +229,55 @@ class DatalogReadingPortAgent(PortAgent):
         if packet is not None:
             if packet.header.packet_type in self.target_types:
                 self.router.got_data([packet])
+
+        else:
+            self._filehandle.close()
+            self._filehandle = None
+
+        # allow the reactor loop to process other events
+        reactor.callLater(0, self._read)
+
+
+class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
+    def __init__(self, config):
+        super(DigiDatalogAsciiPortAgent, self).__init__(config)
+        self.ooi_ts_regex = re.compile(r'<OOI-TS (.+?) TS>(.*?)<\\OOI-TS>', re.DOTALL)
+        self.buffer = ''
+        self.MAXBUF = 65535
+
+    def _read(self):
+        """
+        Read one packet, publish if appropriate, then return.
+        We must not read all packets in a loop here, or we will not actually publish them until the end...
+        """
+        if self._filehandle is None and not self.files:
+            log.msg('Completed reading specified port agent logs, exiting...')
+            reactor.stop()
+            return
+
+        if self._filehandle is None:
+            name = self.files.pop()
+            log.msg('Begin reading:', name)
+            self._filehandle = open(name, 'r')
+
+        chunk = self._filehandle.read(1024)
+        if chunk != '':
+            self.buffer += chunk
+            new_index = 0
+            for match in self.ooi_ts_regex.finditer(self.buffer):
+                payload = match.group(2)
+                packet_time = string_to_ntp_date_time(match.group(1))
+                header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(payload), packet_time=packet_time)
+                header.set_checksum(payload)
+                packet = Packet(payload=payload, header=header)
+                self.router.got_data([packet])
+                new_index = match.end()
+
+            if new_index > 0:
+                self.buffer = self.buffer[new_index:]
+
+            if len(self.buffer) > self.MAXBUF:
+                self.buffer = self.buffer[-self.MAXBUF:]
 
         else:
             self._filehandle.close()
