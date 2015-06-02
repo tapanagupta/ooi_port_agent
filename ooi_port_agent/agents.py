@@ -2,6 +2,7 @@ from __future__ import division
 from collections import deque
 import json
 import re
+from datetime import datetime
 
 from twisted.internet.endpoints import TCP4ServerEndpoint
 from twisted.internet import reactor
@@ -241,14 +242,13 @@ class DatalogReadingPortAgent(PortAgent):
 class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
     def __init__(self, config):
         super(DigiDatalogAsciiPortAgent, self).__init__(config)
-        self.ooi_ts_regex = re.compile(r'<OOI-TS (.+?) TS>(.*?)<\\OOI-TS>', re.DOTALL)
+        self.ooi_ts_regex = re.compile(r'<OOI-TS (.+?) TS>\r\n(.*?)<\\OOI-TS>', re.DOTALL)
         self.buffer = ''
         self.MAXBUF = 65535
 
     def _read(self):
         """
-        Read one packet, publish if appropriate, then return.
-        We must not read all packets in a loop here, or we will not actually publish them until the end...
+        Read a chunk of data and inspect it for a complete DIGI ASCII record. When found, publish.
         """
         if self._filehandle is None and not self.files:
             log.msg('Completed reading specified port agent logs, exiting...')
@@ -266,11 +266,14 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
             new_index = 0
             for match in self.ooi_ts_regex.finditer(self.buffer):
                 payload = match.group(2)
-                packet_time = string_to_ntp_date_time(match.group(1))
-                header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(payload), packet_time=packet_time)
-                header.set_checksum(payload)
-                packet = Packet(payload=payload, header=header)
-                self.router.got_data([packet])
+                try:
+                    packet_time = string_to_ntp_date_time(match.group(1))
+                    header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(payload), packet_time=packet_time)
+                    header.set_checksum(payload)
+                    packet = Packet(payload=payload, header=header)
+                    self.router.got_data([packet])
+                except ValueError:
+                    log.err('Unable to extract timestamp from record: %r' % match.group())
                 new_index = match.end()
 
             if new_index > 0:
@@ -285,3 +288,64 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
 
         # allow the reactor loop to process other events
         reactor.callLater(0, self._read)
+
+
+class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
+    def __init__(self, config):
+        super(LinewiseDatalogPortAgent, self).__init__(config)
+        self.matchers = [
+            (re.compile(r'(\d\d/\d\d/\d\d)\s+(\d\d:\d\d:\d\d)'), self._extract_flort_time),  # 03/07/15 00:00:00
+            (re.compile(r'SATS[DL]F\d+,(\d+),([0-9.]+)'), self._extract_nutnr_time),  # SATSLF0379,2015066,0.001928
+        ]
+
+    def _read(self):
+        """
+        Read one line at a time, search for known timestamps and return a timestamp record for each line found.
+        """
+        if self._filehandle is None and not self.files:
+            log.msg('Completed reading specified port agent logs, exiting...')
+            reactor.stop()
+            return
+
+        if self._filehandle is None:
+            name = self.files.pop()
+            log.msg('Begin reading:', name)
+            self._filehandle = open(name, 'r')
+
+        try:
+            line = self._filehandle.next()
+            data = line + NEWLINE
+            try:
+                ts = self._find_timestamp(line)
+                print ts
+            except ValueError:
+                ts = None
+            if ts is not None:
+                header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(data), packet_time=ts)
+                header.set_checksum(data)
+                packet = Packet(payload=data, header=header)
+                self.router.got_data([packet])
+            else:
+                pass
+                print repr(line)
+
+        except StopIteration:
+            self._filehandle.close()
+            self._filehandle = None
+
+        # allow the reactor loop to process other events
+        reactor.callLater(0, self._read)
+
+    def _find_timestamp(self, line):
+        for matcher, extractor in self.matchers:
+            match = matcher.search(line)
+            if match:
+                return extractor(match)
+
+    def _extract_flort_time(self, match):
+        dt = datetime.strptime('%s %s' % (match.group(1), match.group(2)), '%m/%d/%y %H:%M:%S')
+        return (dt - Packet.ntp_epoch).total_seconds()
+
+    def _extract_nutnr_time(self, match):
+        date = datetime.strptime(match.group(1), '%Y%j')
+        return (date - Packet.ntp_epoch).total_seconds() + float(match.group(2)) * 3600

@@ -80,6 +80,7 @@ class AgentTypes(Enumeration):
     ANTELOPE = 'antelope'
     DATALOG = 'datalog'
     DIGILOG_ASCII = 'digilog_ascii'
+    LINEWISE = 'linewise'
 
 
 class Format(Enumeration):
