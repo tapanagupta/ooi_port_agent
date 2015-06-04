@@ -1,9 +1,10 @@
 from __future__ import division
-from collections import deque
+
+import ooi_port_agent
 import json
 import re
-from datetime import datetime
 
+from datetime import datetime
 from twisted.internet.endpoints import TCP4ServerEndpoint
 from twisted.internet import reactor
 from twisted.python import log
@@ -110,6 +111,7 @@ class PortAgent(object):
         log.msg('PortAgent register commands for protocol: %s' % command_protocol)
         command_protocol.register_command('get_state', self.get_state)
         command_protocol.register_command('get_config', self.get_config)
+        command_protocol.register_command('get_version', self.get_version)
 
     def get_state(self, *args):
         log.msg('get_state: %r %d' % (self.connections, self.num_connections))
@@ -119,6 +121,9 @@ class PortAgent(object):
 
     def get_config(self, *args):
         return Packet.create(json.dumps(self.config), PacketType.PA_CONFIG)
+
+    def get_version(self):
+        return ooi_port_agent.__version__
 
 
 class TcpPortAgent(PortAgent):

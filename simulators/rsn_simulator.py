@@ -9,8 +9,8 @@ import sys
 from twisted.internet import protocol, reactor, endpoints
 from twisted.internet.protocol import connectionDone
 from twisted.python import log
-from port_agent.common import PacketType
-from port_agent.packet import Packet
+from ooi_port_agent.common import PacketType
+from ooi_port_agent.packet import Packet
 
 log.startLogging(sys.stdout)
 
