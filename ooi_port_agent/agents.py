@@ -122,8 +122,8 @@ class PortAgent(object):
     def get_config(self, *args):
         return Packet.create(json.dumps(self.config), PacketType.PA_CONFIG)
 
-    def get_version(self):
-        return ooi_port_agent.__version__
+    def get_version(self, *args):
+        return Packet.create(ooi_port_agent.__version__, PacketType.PA_CONFIG)
 
 
 class TcpPortAgent(PortAgent):
