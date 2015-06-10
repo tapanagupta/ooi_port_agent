@@ -198,7 +198,11 @@ class BotptPortAgent(PortAgent):
 class DatalogReadingPortAgent(PortAgent):
     def __init__(self, config):
         super(DatalogReadingPortAgent, self).__init__(config)
-        self.files = config['files']
+        self.files = []
+        for each in config['files']:
+            self.files.extend(each)
+
+        self.files.sort()
         self._filehandle = None
         self.target_types = [PacketType.FROM_INSTRUMENT, PacketType.PA_CONFIG]
         self._start_when_ready()
@@ -251,13 +255,24 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
         self.buffer = ''
         self.MAXBUF = 65535
 
+        # special case for RSN archived data
+        # if all files have date_UTC in filename then sort by that
+        def search_utc(f):
+            match = re.search('(\d+T\d+_UTC)', f)
+            if match is None:
+                return None
+            else:
+                return match.group(1)
+
+        if all((search_utc(f) for f in self.files)):
+            self.files.sort(key=search_utc)
+
     def _read(self):
         """
         Read a chunk of data and inspect it for a complete DIGI ASCII record. When found, publish.
         """
         if self._filehandle is None and not self.files:
-            log.msg('Completed reading specified port agent logs, exiting...')
-            reactor.stop()
+            log.msg('Completed reading specified port agent logs')
             return
 
         if self._filehandle is None:
@@ -292,7 +307,7 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
             self._filehandle = None
 
         # allow the reactor loop to process other events
-        reactor.callLater(0, self._read)
+        reactor.callLater(0.02, self._read)
 
 
 class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
@@ -322,24 +337,23 @@ class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
             data = line + NEWLINE
             try:
                 ts = self._find_timestamp(line)
-                print ts
             except ValueError:
                 ts = None
             if ts is not None:
                 header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(data), packet_time=ts)
                 header.set_checksum(data)
-                packet = Packet(payload=data, header=header)
-                self.router.got_data([packet])
+                packet = [Packet(payload=data, header=header)]
             else:
-                pass
-                print repr(line)
+                packet = Packet.create(data, PacketType.FROM_INSTRUMENT)
+
+            self.router.got_data(packet)
 
         except StopIteration:
             self._filehandle.close()
             self._filehandle = None
 
         # allow the reactor loop to process other events
-        reactor.callLater(0, self._read)
+        reactor.callLater(0.02, self._read)
 
     def _find_timestamp(self, line):
         for matcher, extractor in self.matchers:
