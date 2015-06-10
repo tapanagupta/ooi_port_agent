@@ -1,4 +1,5 @@
 from __future__ import division
+import glob
 
 import ooi_port_agent
 import json
@@ -200,7 +201,7 @@ class DatalogReadingPortAgent(PortAgent):
         super(DatalogReadingPortAgent, self).__init__(config)
         self.files = []
         for each in config['files']:
-            self.files.extend(each)
+            self.files.extend(glob.glob(each))
 
         self.files.sort()
         self._filehandle = None
@@ -231,7 +232,7 @@ class DatalogReadingPortAgent(PortAgent):
             return
 
         if self._filehandle is None:
-            name = self.files.pop()
+            name = self.files.pop(0)
             log.msg('Begin reading:', name)
             self._filehandle = open(name, 'r')
 
@@ -276,7 +277,7 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
             return
 
         if self._filehandle is None:
-            name = self.files.pop()
+            name = self.files.pop(0)
             log.msg('Begin reading:', name)
             self._filehandle = open(name, 'r')
 
@@ -307,20 +308,18 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
             self._filehandle = None
 
         # allow the reactor loop to process other events
-        reactor.callLater(0.02, self._read)
+        reactor.callLater(0.01, self._read)
 
 
 class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
     def __init__(self, config):
         super(LinewiseDatalogPortAgent, self).__init__(config)
-        self.matchers = [
-            (re.compile(r'(\d\d/\d\d/\d\d)\s+(\d\d:\d\d:\d\d)'), self._extract_flort_time),  # 03/07/15 00:00:00
-            (re.compile(r'SATS[DL]F\d+,(\d+),([0-9.]+)'), self._extract_nutnr_time),  # SATSLF0379,2015066,0.001928
-        ]
 
     def _read(self):
         """
-        Read one line at a time, search for known timestamps and return a timestamp record for each line found.
+        Read one line at a time, publish as a packet with TS of 0
+        It is expected that the driver will use the internal timestamp
+        of the record as the definitive timestamp
         """
         if self._filehandle is None and not self.files:
             log.msg('Completed reading specified port agent logs, exiting...')
@@ -335,17 +334,10 @@ class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
         try:
             line = self._filehandle.next()
             data = line + NEWLINE
-            try:
-                ts = self._find_timestamp(line)
-            except ValueError:
-                ts = None
-            if ts is not None:
-                header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(data), packet_time=ts)
-                header.set_checksum(data)
-                packet = [Packet(payload=data, header=header)]
-            else:
-                packet = Packet.create(data, PacketType.FROM_INSTRUMENT)
 
+            header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(data), packet_time=0)
+            header.set_checksum(data)
+            packet = [Packet(payload=data, header=header)]
             self.router.got_data(packet)
 
         except StopIteration:
@@ -353,18 +345,5 @@ class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
             self._filehandle = None
 
         # allow the reactor loop to process other events
-        reactor.callLater(0.02, self._read)
+        reactor.callLater(0.01, self._read)
 
-    def _find_timestamp(self, line):
-        for matcher, extractor in self.matchers:
-            match = matcher.search(line)
-            if match:
-                return extractor(match)
-
-    def _extract_flort_time(self, match):
-        dt = datetime.strptime('%s %s' % (match.group(1), match.group(2)), '%m/%d/%y %H:%M:%S')
-        return (dt - Packet.ntp_epoch).total_seconds()
-
-    def _extract_nutnr_time(self, match):
-        date = datetime.strptime(match.group(1), '%Y%j')
-        return (date - Packet.ntp_epoch).total_seconds() + float(match.group(2)) * 3600
