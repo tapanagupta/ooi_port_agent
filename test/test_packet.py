@@ -1,7 +1,7 @@
 import unittest
 from StringIO import StringIO
-from port_agent.common import PacketType
-from port_agent.packet import Packet, PacketHeader, InvalidHeaderException
+from ooi_port_agent.common import PacketType
+from ooi_port_agent.packet import Packet, PacketHeader, InvalidHeaderException
 
 
 class PacketUnitTest(unittest.TestCase):

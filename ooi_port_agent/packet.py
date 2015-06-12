@@ -4,7 +4,15 @@
 import struct
 from datetime import datetime
 from common import PacketType
-from ooi_port_agent.lrc import lrc
+
+# fall back to pure python LRC should we fail to import the C module
+try:
+    from ooi_port_agent.lrc import lrc
+except ImportError:
+    def lrc(data, seed=0):
+        for byte in bytearray(data):
+            seed ^= byte
+        return seed
 
 
 class InvalidHeaderException(Exception):

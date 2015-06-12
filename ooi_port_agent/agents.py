@@ -246,7 +246,7 @@ class DatalogReadingPortAgent(PortAgent):
             self._filehandle = None
 
         # allow the reactor loop to process other events
-        reactor.callLater(0, self._read)
+        reactor.callLater(0.01, self._read)
 
 
 class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
@@ -311,9 +311,9 @@ class DigiDatalogAsciiPortAgent(DatalogReadingPortAgent):
         reactor.callLater(0.01, self._read)
 
 
-class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
+class ChunkyDatalogPortAgent(DatalogReadingPortAgent):
     def __init__(self, config):
-        super(LinewiseDatalogPortAgent, self).__init__(config)
+        super(ChunkyDatalogPortAgent, self).__init__(config)
 
     def _read(self):
         """
@@ -331,16 +331,15 @@ class LinewiseDatalogPortAgent(DatalogReadingPortAgent):
             log.msg('Begin reading:', name)
             self._filehandle = open(name, 'r')
 
-        try:
-            line = self._filehandle.next()
-            data = line + NEWLINE
 
+        data = self._filehandle.read(1024)
+        if data != '':
             header = PacketHeader(packet_type=PacketType.FROM_INSTRUMENT, payload_size=len(data), packet_time=0)
             header.set_checksum(data)
             packet = [Packet(payload=data, header=header)]
             self.router.got_data(packet)
 
-        except StopIteration:
+        else:
             self._filehandle.close()
             self._filehandle = None
 

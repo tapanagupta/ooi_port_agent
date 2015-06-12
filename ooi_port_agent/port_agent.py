@@ -9,7 +9,7 @@ Usage:
     port_agent.py antelope <port> <commandport> <instaddr> <instport> [--sniff=<sniffport>] [--name=<name>]
     port_agent.py datalog <port> <commandport> <files>...
     port_agent.py digilog_ascii <port> <commandport> <files>...
-    port_agent.py linewise <port> <commandport> <files>...
+    port_agent.py chunky <port> <commandport> <files>...
 
 Options:
     -h, --help          Show this screen.
@@ -24,7 +24,7 @@ from twisted.python import log
 import yaml
 from common import AgentTypes
 from agents import TcpPortAgent, RsnPortAgent, BotptPortAgent, DatalogReadingPortAgent, DigiDatalogAsciiPortAgent, \
-    LinewiseDatalogPortAgent
+    ChunkyDatalogPortAgent
 
 
 def configure_logging():
@@ -95,7 +95,7 @@ def main():
         AgentTypes.BOTPT: BotptPortAgent,
         AgentTypes.DATALOG: DatalogReadingPortAgent,
         AgentTypes.DIGILOG_ASCII: DigiDatalogAsciiPortAgent,
-        AgentTypes.LINEWISE: LinewiseDatalogPortAgent,
+        AgentTypes.CHUNKY: ChunkyDatalogPortAgent,
         AgentTypes.CAMHD: CamhdPortAgent,
         AgentTypes.ANTELOPE: AntelopePortAgent
     }
