@@ -327,10 +327,9 @@ class ChunkyDatalogPortAgent(DatalogReadingPortAgent):
             return
 
         if self._filehandle is None:
-            name = self.files.pop()
+            name = self.files.pop(0)
             log.msg('Begin reading:', name)
             self._filehandle = open(name, 'r')
-
 
         data = self._filehandle.read(1024)
         if data != '':
