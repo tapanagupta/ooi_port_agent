@@ -2,12 +2,16 @@
 # Protocols
 #################################################################################
 from collections import deque
-import json
+import platform
+import socket
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.python import log
 from common import PacketType, BINARY_TIMESTAMP
 from packet import Packet
+
+KEEPALIVE_IDLE = 100
+KEEPALIVE_INTVL = 5
 
 
 class PortAgentProtocol(Protocol):
@@ -33,8 +37,6 @@ class PortAgentProtocol(Protocol):
         Register this protocol with the router
         """
         self.port_agent.router.register(self.endpoint_type, self)
-        self.transport.setTcpKeepAlive(True)
-        self.transport.setTcpNoDelay(True)
 
     def connectionLost(self, reason=connectionDone):
         """
@@ -50,10 +52,26 @@ class InstrumentProtocol(PortAgentProtocol):
     def connectionMade(self):
         self.port_agent.instrument_connected(self)
         self.port_agent.router.register(self.endpoint_type, self)
+        self.configure_tcp()
 
     def connectionLost(self, reason=connectionDone):
         self.port_agent.instrument_disconnected(self)
         self.port_agent.router.deregister(self.endpoint_type, self)
+
+    def configure_tcp(self):
+        self.transport.setTcpKeepAlive(True)
+        self.transport.setTcpNoDelay(True)
+
+        # configure keepalive
+        if platform.system() == 'Darwin':
+            TCP_KEEPALIVE = 0x10
+            TCP_KEEPINTVL = 0x101
+            self.transport.socket.setsockopt(socket.SOL_TCP, TCP_KEEPALIVE, KEEPALIVE_IDLE)
+            self.transport.socket.setsockopt(socket.SOL_TCP, TCP_KEEPINTVL, KEEPALIVE_INTVL)
+
+        elif platform.system() == 'Linux':
+            self.transport.socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, KEEPALIVE_IDLE)
+            self.transport.socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, KEEPALIVE_INTVL)
 
 
 class DigiInstrumentProtocol(InstrumentProtocol):
