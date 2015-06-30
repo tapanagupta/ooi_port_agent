@@ -19,14 +19,19 @@ Options:
 """
 import logging
 import os
+
 from docopt import docopt
-import sys
 from twisted.internet import reactor
 from twisted.python import log
 import yaml
+
 from common import AgentTypes
-from agents import TcpPortAgent, RsnPortAgent, BotptPortAgent, DatalogReadingPortAgent, DigiDatalogAsciiPortAgent, \
-    ChunkyDatalogPortAgent
+from agents import TcpPortAgent
+from agents import RsnPortAgent
+from agents import BotptPortAgent
+from agents import DatalogReadingPortAgent
+from agents import DigiDatalogAsciiPortAgent
+from agents import ChunkyDatalogPortAgent
 
 
 def configure_logging():
