@@ -1,20 +1,29 @@
 from __future__ import division
 import glob
-
-import ooi_port_agent
 import json
 import re
 
-from datetime import datetime
 from twisted.internet.endpoints import TCP4ServerEndpoint
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.python.logfile import DailyLogFile
-from common import EndpointType, PacketType, Format, HEARTBEAT_INTERVAL, NEWLINE, string_to_ntp_date_time
-from factories import DataFactory, CommandFactory, InstrumentClientFactory, DigiInstrumentClientFactory, \
-    DigiCommandClientFactory
-from packet import Packet, PacketHeader
+
+import ooi_port_agent
+from common import EndpointType
+from common import PacketType
+from common import Format
+from common import HEARTBEAT_INTERVAL
+from common import NEWLINE
+from common import string_to_ntp_date_time
+from factories import DataFactory
+from factories import CommandFactory
+from factories import InstrumentClientFactory
+from factories import DigiInstrumentClientFactory
+from factories import DigiCommandClientFactory
+from packet import Packet
+from packet import PacketHeader
 from router import Router
+
 
 
 #################################################################################
@@ -35,6 +44,7 @@ class PortAgent(object):
 
         self.router = Router()
         self.connections = set()
+        self.clients = set()
 
         self._register_loggers()
         self._create_routes()
@@ -59,6 +69,7 @@ class PortAgent(object):
 
         # from INSTRUMENT
         self.router.add_route(PacketType.FROM_INSTRUMENT, EndpointType.CLIENT, data_format=Format.PACKET)
+        self.router.add_route(PacketType.PICKLED_FROM_INSTRUMENT, EndpointType.CLIENT, data_format=Format.PACKET)
 
         # from COMMAND SERVER
         self.router.add_route(PacketType.PA_COMMAND, EndpointType.COMMAND_HANDLER, data_format=Format.PACKET)
@@ -96,6 +107,14 @@ class PortAgent(object):
         packets = Packet.create('HB', PacketType.PA_HEARTBEAT)
         self.router.got_data(packets)
         reactor.callLater(HEARTBEAT_INTERVAL, self._heartbeat)
+
+    def client_connected(self, connection):
+        log.msg('CLIENT CONNECTED FROM ', connection)
+        self.clients.add(connection)
+
+    def client_disconnected(self, connection):
+        self.clients.remove(connection)
+        log.msg('CLIENT DISCONNECTED FROM ', connection)
 
     def instrument_connected(self, connection):
         log.msg('CONNECTED TO ', connection)

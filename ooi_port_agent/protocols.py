@@ -4,10 +4,12 @@
 from collections import deque
 import platform
 import socket
-from twisted.internet.protocol import Protocol, connectionDone
+from twisted.internet.protocol import Protocol
+from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.python import log
-from common import PacketType, BINARY_TIMESTAMP
+from common import PacketType
+from common import BINARY_TIMESTAMP
 from packet import Packet
 
 KEEPALIVE_IDLE = 100
@@ -43,6 +45,22 @@ class PortAgentProtocol(Protocol):
         Connection lost, deregister with the router
         """
         self.port_agent.router.deregister(self.endpoint_type, self)
+
+
+class PortAgentClientProtocol(PortAgentProtocol):
+    def connectionMade(self):
+        """
+        Register this protocol with the router and add to the port agent client list
+        """
+        self.port_agent.router.register(self.endpoint_type, self)
+        self.port_agent.client_connected(self)
+
+    def connectionLost(self, reason=connectionDone):
+        """
+        Connection lost, deregister with the router and remove from the port agent client list
+        """
+        self.port_agent.router.deregister(self.endpoint_type, self)
+        self.port_agent.client_disconnected(self)
 
 
 class InstrumentProtocol(PortAgentProtocol):

@@ -1,7 +1,15 @@
 from collections import Counter
+
 from twisted.internet import reactor
 from twisted.python import log
-from common import PacketType, EndpointType, Format, RouterStat, ROUTER_STATS_INTERVAL, NEWLINE
+
+from common import PacketType
+from common import EndpointType
+from common import Format
+from common import RouterStat
+from common import ROUTER_STATS_INTERVAL
+from common import NEWLINE
+
 
 #################################################################################
 # Port Agent Router
